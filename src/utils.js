@@ -1,3 +1,11 @@
+/** Default star / empty artwork asset returned by Last.fm for many API image fields. */
+const LFM_PLACEHOLDER_IMAGE_ID = "2a96cbd8b46e442fc41c2b86b821562f";
+
+function isPlaceholderLastFmImage(url) {
+  if (!url) return true;
+  return url.includes(LFM_PLACEHOLDER_IMAGE_ID);
+}
+
 function getImg(images, size, name) {
   console.group("getImg", name);
   console.log("images", images);
@@ -9,4 +17,4 @@ function getImg(images, size, name) {
   return found ? found["#text"] : "";
 }
 
-export { getImg };
+export { getImg, isPlaceholderLastFmImage };

@@ -7,7 +7,7 @@ import {
   BarElement,
   Tooltip,
 } from "chart.js";
-import { getImg } from "./utils.js";
+import { getImg, isPlaceholderLastFmImage } from "./utils.js";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -191,6 +191,37 @@ const PERIODS = [
   { label: "all time", value: "overall" },
 ];
 
+/** Last.fm often leaves `user.gettoptracks` images empty or uses a generic star; `track.getInfo` usually has real `album.image`. */
+async function enrichTopTracksWithAlbumArt(tracks, apiKey, username) {
+  const list = Array.isArray(tracks) ? tracks : [tracks];
+  return Promise.all(
+    list.map(async (t) => {
+      const existing = getImg(t.image, "small");
+      if (existing && !isPlaceholderLastFmImage(existing)) return t;
+      try {
+        const res = await lfm(
+          "track.getInfo",
+          {
+            artist: t.artist.name,
+            track: t.name,
+            username,
+            autocorrect: 1,
+          },
+          apiKey,
+        );
+        const album = res.track?.album;
+        const fromAlbum = album?.image ? getImg(album.image, "small") : "";
+        if (fromAlbum && !isPlaceholderLastFmImage(fromAlbum)) {
+          return { ...t, image: album.image };
+        }
+      } catch {
+        /* ignore per-track failures */
+      }
+      return t;
+    }),
+  );
+}
+
 export default function App() {
   const [apiKey, setApiKey] = useState(
     () => localStorage.getItem("lfm_apikey") || "",
@@ -244,11 +275,19 @@ export default function App() {
         ? recentRes.recenttracks.track
         : [recentRes.recenttracks.track];
 
+      const tracksRaw = tracksRes.toptracks.track;
+      const tracksList = Array.isArray(tracksRaw) ? tracksRaw : [tracksRaw];
+      const tracks = await enrichTopTracksWithAlbumArt(
+        tracksList,
+        apiKey,
+        username,
+      );
+
       setData({
         info,
         artists: artistsRes.topartists.artist,
         artistsTotal: artistsRes.topartists["@attr"].total,
-        tracks: tracksRes.toptracks.track,
+        tracks,
         tracksTotal: tracksRes.toptracks["@attr"].total,
         albums: albumsRes.topalbums.album,
         albumsTotal: albumsRes.topalbums["@attr"].total,
