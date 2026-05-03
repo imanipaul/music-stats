@@ -222,6 +222,36 @@ async function enrichTopTracksWithAlbumArt(tracks, apiKey, username) {
   );
 }
 
+/** `user.gettopartists` often returns empty or generic star images; `artist.getInfo` usually has real photos. */
+async function enrichTopArtistsWithImages(artists, apiKey, username) {
+  const list = Array.isArray(artists) ? artists : [artists];
+  return Promise.all(
+    list.map(async (a) => {
+      const existing = getImg(a.image, "medium");
+      if (existing && !isPlaceholderLastFmImage(existing)) return a;
+      try {
+        const res = await lfm(
+          "artist.getInfo",
+          {
+            artist: a.name,
+            autocorrect: 1,
+            ...(username.trim() ? { username } : {}),
+          },
+          apiKey,
+        );
+        const img = res.artist?.image;
+        const url = img ? getImg(img, "medium") : "";
+        if (url && !isPlaceholderLastFmImage(url)) {
+          return { ...a, image: img };
+        }
+      } catch {
+        /* ignore per-artist failures */
+      }
+      return a;
+    }),
+  );
+}
+
 export default function App() {
   const [apiKey, setApiKey] = useState(
     () => localStorage.getItem("lfm_apikey") || "",
@@ -283,9 +313,17 @@ export default function App() {
         username,
       );
 
+      const artistsRaw = artistsRes.topartists.artist;
+      const artistsList = Array.isArray(artistsRaw) ? artistsRaw : [artistsRaw];
+      const artists = await enrichTopArtistsWithImages(
+        artistsList,
+        apiKey,
+        username,
+      );
+
       setData({
         info,
-        artists: artistsRes.topartists.artist,
+        artists,
         artistsTotal: artistsRes.topartists["@attr"].total,
         tracks,
         tracksTotal: tracksRes.toptracks["@attr"].total,
@@ -319,6 +357,8 @@ export default function App() {
   const trendData = (() => {
     if (!data) return null;
     const buckets = {};
+    console.log("data", data);
+    console.log("data.recent", data.recent);
     data.recent.forEach((t) => {
       if (!t.date) return;
       const d = new Date(parseInt(t.date.uts) * 1000);
