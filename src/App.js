@@ -36,62 +36,24 @@ function timeAgo(uts) {
 
 function Avatar({ src, round, size = 40 }) {
   const [err, setErr] = useState(false);
-  const style = {
-    width: size,
-    height: size,
-    borderRadius: round ? "50%" : 6,
-    background: "#1f1f26",
-    flexShrink: 0,
-    objectFit: "cover",
-    display: "block",
-  };
-  if (!src || err) return <div style={style} />;
-  return <img src={src} alt="" style={style} onError={() => setErr(true)} />;
+  const dim = size === 36 ? "h-9 w-9" : "h-10 w-10";
+  const radius = round ? "rounded-full" : "rounded-md";
+  const cls = `block shrink-0 object-cover bg-[#1f1f26] ${dim} ${radius}`;
+  if (!src || err) return <div className={cls} />;
+  return <img src={src} alt="" className={cls} onError={() => setErr(true)} />;
 }
 
 function StatCard({ label, value, sub }) {
   return (
-    <div
-      style={{
-        background: "#111114",
-        border: "0.5px solid rgba(255,255,255,0.07)",
-        borderRadius: 12,
-        padding: "1rem",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 10,
-          color: "#7b7a87",
-          textTransform: "uppercase",
-          letterSpacing: "0.8px",
-          marginBottom: 6,
-          fontFamily: "'DM Mono', monospace",
-        }}
-      >
+    <div className="rounded-xl border border-white/[0.07] bg-[#111114] p-4">
+      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.8px] text-[#7b7a87]">
         {label}
       </div>
-      <div
-        style={{
-          fontFamily: "'Syne', sans-serif",
-          fontSize: 26,
-          fontWeight: 800,
-          color: "#f0eff4",
-        }}
-      >
+      <div className="font-sans text-[26px] font-extrabold text-[#f0eff4]">
         {value || "—"}
       </div>
       {sub && (
-        <div
-          style={{
-            fontSize: 10,
-            color: "#7b7a87",
-            marginTop: 3,
-            fontFamily: "'DM Mono', monospace",
-          }}
-        >
-          {sub}
-        </div>
+        <div className="mt-0.5 font-mono text-[10px] text-[#7b7a87]">{sub}</div>
       )}
     </div>
   );
@@ -99,84 +61,30 @@ function StatCard({ label, value, sub }) {
 
 function RankItem({ rank, img: imgSrc, round, name, meta, plays, barPct }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "10px 1.25rem",
-        borderBottom: "0.5px solid rgba(255,255,255,0.07)",
-      }}
-    >
-      <span
-        style={{
-          fontSize: 11,
-          color: "#504f5c",
-          width: 18,
-          textAlign: "right",
-          flexShrink: 0,
-          fontFamily: "'DM Mono', monospace",
-        }}
-      >
+    <div className="flex items-center gap-3 border-b border-white/[0.07] py-2.5 px-5">
+      <span className="w-[18px] shrink-0 text-right font-mono text-[11px] text-[#504f5c]">
         {rank}
       </span>
       <Avatar src={imgSrc} round={round} size={40} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontFamily: "'Syne', sans-serif",
-            fontSize: 13,
-            fontWeight: 500,
-            color: "#f0eff4",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-sans text-[13px] font-medium text-[#f0eff4]">
           {name}
         </div>
         {meta && (
-          <div
-            style={{
-              fontSize: 11,
-              color: "#7b7a87",
-              marginTop: 2,
-              fontFamily: "'DM Mono', monospace",
-            }}
-          >
+          <div className="mt-0.5 font-mono text-[11px] text-[#7b7a87]">
             {meta}
           </div>
         )}
       </div>
       {barPct !== undefined && (
-        <div
-          style={{
-            width: 80,
-            height: 3,
-            background: "#1f1f26",
-            borderRadius: 2,
-            flexShrink: 0,
-          }}
-        >
+        <div className="h-[3px] w-20 shrink-0 rounded-sm bg-[#1f1f26]">
           <div
-            style={{
-              width: `${barPct}%`,
-              height: "100%",
-              background: "linear-gradient(90deg, #9b5de5, #c8a8f0)",
-              borderRadius: 2,
-            }}
+            className="h-full rounded-sm bg-gradient-to-r from-[#9b5de5] to-[#c8a8f0]"
+            style={{ width: `${barPct}%` }}
           />
         </div>
       )}
-      <span
-        style={{
-          fontSize: 12,
-          color: "#c8a8f0",
-          fontWeight: 500,
-          whiteSpace: "nowrap",
-          fontFamily: "'DM Mono', monospace",
-        }}
-      >
+      <span className="whitespace-nowrap font-mono text-xs font-medium text-[#c8a8f0]">
         {parseInt(plays).toLocaleString()}
       </span>
     </div>
@@ -357,8 +265,6 @@ export default function App() {
   const trendData = (() => {
     if (!data) return null;
     const buckets = {};
-    console.log("data", data);
-    console.log("data.recent", data.recent);
     data.recent.forEach((t) => {
       if (!t.date) return;
       const d = new Date(parseInt(t.date.uts) * 1000);
@@ -412,122 +318,56 @@ export default function App() {
     },
   };
 
-  const s = { fontFamily: "'DM Mono', monospace" };
+  const statusBorder =
+    status?.type === "error"
+      ? "border-red-400/20"
+      : status?.type === "ok"
+        ? "border-green-400/20"
+        : "border-white/[0.07]";
+  const statusText =
+    status?.type === "error"
+      ? "text-red-400"
+      : status?.type === "ok"
+        ? "text-green-400"
+        : "text-amber-400";
 
   return (
-    <div
-      style={{
-        background: "#0a0a0b",
-        minHeight: "100vh",
-        color: "#f0eff4",
-        ...s,
-      }}
-    >
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "2rem 1.5rem" }}>
+    <div className="min-h-screen bg-[#0a0a0b] font-mono text-[#f0eff4]">
+      <div className="mx-auto max-w-[900px] px-6 py-8">
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            marginBottom: "2.5rem",
-            flexWrap: "wrap",
-            gap: "1rem",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                background: "#9b5de5",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+        <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#9b5de5]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
               </svg>
             </div>
             <div>
-              <div
-                style={{
-                  fontFamily: "'Syne', sans-serif",
-                  fontSize: 18,
-                  fontWeight: 700,
-                }}
-              >
-                scrobble.stats
-              </div>
-              <div style={{ fontSize: 11, color: "#7b7a87" }}>
-                powered by last.fm
-              </div>
+              <div className="font-sans text-lg font-bold">scrobble.stats</div>
+              <div className="text-[11px] text-[#7b7a87]">powered by last.fm</div>
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              background: "#111114",
-              border: "0.5px solid rgba(255,255,255,0.12)",
-              borderRadius: 14,
-              padding: "0.85rem 1.1rem",
-            }}
-          >
+          <div className="flex flex-wrap items-center gap-2 rounded-[14px] border border-white/[0.12] bg-[#111114] px-[1.1rem] py-[0.85rem]">
             <input
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               onKeyDown={handleKey}
               placeholder="api key"
               type="password"
-              style={{
-                background: "#1f1f26",
-                border: "0.5px solid rgba(255,255,255,0.07)",
-                borderRadius: 8,
-                padding: "7px 11px",
-                color: "#f0eff4",
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 12,
-                width: 180,
-                outline: "none",
-              }}
+              className="w-[180px] rounded-lg border border-white/[0.07] bg-[#1f1f26] px-[11px] py-[7px] font-mono text-xs text-[#f0eff4] outline-none placeholder:text-[#504f5c]"
             />
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={handleKey}
               placeholder="username"
-              style={{
-                background: "#1f1f26",
-                border: "0.5px solid rgba(255,255,255,0.07)",
-                borderRadius: 8,
-                padding: "7px 11px",
-                color: "#f0eff4",
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 12,
-                width: 130,
-                outline: "none",
-              }}
+              className="w-[130px] rounded-lg border border-white/[0.07] bg-[#1f1f26] px-[11px] py-[7px] font-mono text-xs text-[#f0eff4] outline-none placeholder:text-[#504f5c]"
             />
             <button
               onClick={loadData}
               disabled={loading}
-              style={{
-                background: "#9b5de5",
-                border: "none",
-                borderRadius: 8,
-                padding: "7px 14px",
-                color: "white",
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 12,
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.5 : 1,
-              }}
+              className="rounded-lg border-none bg-[#9b5de5] px-3.5 py-[7px] font-mono text-xs text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "loading..." : "load →"}
             </button>
@@ -537,52 +377,23 @@ export default function App() {
         {/* Status */}
         {status && (
           <div
-            style={{
-              background: "#111114",
-              border: `0.5px solid ${status.type === "error" ? "rgba(248,113,113,0.2)" : status.type === "ok" ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.07)"}`,
-              borderRadius: 10,
-              padding: "10px 16px",
-              marginBottom: "1.5rem",
-              fontSize: 12,
-              color:
-                status.type === "error"
-                  ? "#f87171"
-                  : status.type === "ok"
-                    ? "#4ade80"
-                    : "#fbbf24",
-            }}
+            className={`mb-6 rounded-[10px] border bg-[#111114] px-4 py-2.5 text-xs ${statusBorder} ${statusText}`}
           >
             {status.msg}
           </div>
         )}
 
         {/* Time tabs */}
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            marginBottom: "2rem",
-            background: "#111114",
-            border: "0.5px solid rgba(255,255,255,0.07)",
-            borderRadius: 10,
-            padding: 4,
-            width: "fit-content",
-          }}
-        >
+        <div className="mb-8 flex w-fit gap-1 rounded-[10px] border border-white/[0.07] bg-[#111114] p-1">
           {PERIODS.map((p) => (
             <button
               key={p.value}
               onClick={() => handlePeriod(p.value)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 7,
-                fontSize: 11,
-                fontFamily: "'DM Mono', monospace",
-                color: period === p.value ? "#c8a8f0" : "#7b7a87",
-                background: period === p.value ? "#3d2060" : "none",
-                border: "none",
-                cursor: "pointer",
-              }}
+              className={`cursor-pointer rounded-[7px] border-none px-3.5 py-1.5 font-mono text-[11px] ${
+                period === p.value
+                  ? "bg-[#3d2060] text-[#c8a8f0]"
+                  : "bg-transparent text-[#7b7a87]"
+              }`}
             >
               {p.label}
             </button>
@@ -590,20 +401,9 @@ export default function App() {
         </div>
 
         {!data && !loading && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "4rem 2rem",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>
-              ♫
-            </div>
-            <div style={{ fontSize: 13, color: "#7b7a87", lineHeight: 1.7 }}>
+          <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
+            <div className="mb-4 text-[40px] opacity-30">♫</div>
+            <div className="text-[13px] leading-relaxed text-[#7b7a87]">
               enter your last.fm api key and username to load your listening
               stats
             </div>
@@ -613,14 +413,7 @@ export default function App() {
         {data && (
           <>
             {/* Stat cards */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                gap: 10,
-                marginBottom: "2rem",
-              }}
-            >
+            <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5">
               <StatCard
                 label="scrobbles"
                 value={parseInt(data.info.playcount).toLocaleString()}
@@ -644,28 +437,11 @@ export default function App() {
             </div>
 
             {/* Top Artists */}
-            <div style={{ marginBottom: "2rem" }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#7b7a87",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  marginBottom: "1rem",
-                  fontFamily: "'Syne', sans-serif",
-                }}
-              >
+            <div className="mb-8">
+              <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                 top artists
               </div>
-              <div
-                style={{
-                  background: "#0d0d10",
-                  border: "0.5px solid rgba(255,255,255,0.07)",
-                  borderRadius: 14,
-                  overflow: "hidden",
-                }}
-              >
+              <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
                 {data.artists.slice(0, 8).map((a, i) => {
                   const max = Math.max(
                     ...data.artists.map((x) => parseInt(x.playcount)),
@@ -687,36 +463,12 @@ export default function App() {
             </div>
 
             {/* Top Tracks + Albums */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "1.25rem",
-                marginBottom: "2rem",
-              }}
-            >
+            <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "#7b7a87",
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: "1rem",
-                    fontFamily: "'Syne', sans-serif",
-                  }}
-                >
+                <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                   top tracks
                 </div>
-                <div
-                  style={{
-                    background: "#0d0d10",
-                    border: "0.5px solid rgba(255,255,255,0.07)",
-                    borderRadius: 14,
-                    overflow: "hidden",
-                  }}
-                >
+                <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
                   {data.tracks.slice(0, 8).map((t, i) => (
                     <RankItem
                       key={t.name + t.artist.name}
@@ -730,27 +482,10 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "#7b7a87",
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: "1rem",
-                    fontFamily: "'Syne', sans-serif",
-                  }}
-                >
+                <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                   top albums
                 </div>
-                <div
-                  style={{
-                    background: "#0d0d10",
-                    border: "0.5px solid rgba(255,255,255,0.07)",
-                    borderRadius: 14,
-                    overflow: "hidden",
-                  }}
-                >
+                <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
                   {data.albums.slice(0, 8).map((a, i) => (
                     <RankItem
                       key={a.name + a.artist.name}
@@ -766,121 +501,47 @@ export default function App() {
             </div>
 
             {/* Trend chart */}
-            <div style={{ marginBottom: "2rem" }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#7b7a87",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  marginBottom: "1rem",
-                  fontFamily: "'Syne', sans-serif",
-                }}
-              >
+            <div className="mb-8">
+              <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                 listening trend
               </div>
-              <div
-                style={{
-                  background: "#0d0d10",
-                  border: "0.5px solid rgba(255,255,255,0.07)",
-                  borderRadius: 14,
-                  padding: "1.25rem",
-                }}
-              >
-                <div style={{ height: 180 }}>
+              <div className="rounded-[14px] border border-white/[0.07] bg-[#0d0d10] p-5">
+                <div className="h-[180px]">
                   {trendData && <Bar data={trendData} options={chartOptions} />}
                 </div>
               </div>
             </div>
 
             {/* Recent tracks */}
-            <div style={{ marginBottom: "2rem" }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#7b7a87",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  marginBottom: "1rem",
-                  fontFamily: "'Syne', sans-serif",
-                }}
-              >
+            <div className="mb-8">
+              <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                 recent tracks
               </div>
-              <div
-                style={{
-                  background: "#0d0d10",
-                  border: "0.5px solid rgba(255,255,255,0.07)",
-                  borderRadius: 14,
-                  overflow: "hidden",
-                }}
-              >
+              <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
                 {data.recent.slice(0, 12).map((t, i) => {
                   const nowPlaying = t["@attr"]?.nowplaying;
                   return (
                     <div
                       key={i}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "9px 1.25rem",
-                        borderBottom:
-                          i < 11
-                            ? "0.5px solid rgba(255,255,255,0.07)"
-                            : "none",
-                      }}
+                      className={`flex items-center gap-2.5 px-5 py-[9px] ${
+                        i < 11 ? "border-b border-white/[0.07]" : ""
+                      }`}
                     >
                       <Avatar src={getImg(t.image, "small")} size={36} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontFamily: "'Syne', sans-serif",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "#f0eff4",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-sans text-[13px] font-medium text-[#f0eff4]">
                           {t.name}
                         </div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "#7b7a87",
-                            fontFamily: "'DM Mono', monospace",
-                          }}
-                        >
+                        <div className="font-mono text-[11px] text-[#7b7a87]">
                           {t.artist["#text"]}
                         </div>
                       </div>
                       {nowPlaying ? (
-                        <span
-                          style={{
-                            fontSize: 9,
-                            background: "rgba(155,93,229,0.2)",
-                            color: "#c8a8f0",
-                            borderRadius: 4,
-                            padding: "2px 6px",
-                            whiteSpace: "nowrap",
-                            fontFamily: "'DM Mono', monospace",
-                          }}
-                        >
+                        <span className="whitespace-nowrap rounded bg-[#9b5de5]/20 px-1.5 py-0.5 font-mono text-[9px] text-[#c8a8f0]">
                           now playing
                         </span>
                       ) : (
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: "#504f5c",
-                            whiteSpace: "nowrap",
-                            fontFamily: "'DM Mono', monospace",
-                          }}
-                        >
+                        <span className="whitespace-nowrap font-mono text-[10px] text-[#504f5c]">
                           {t.date ? timeAgo(t.date.uts) : ""}
                         </span>
                       )}
