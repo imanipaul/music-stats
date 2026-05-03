@@ -322,7 +322,7 @@ export default function App() {
     data.recent.forEach((t) => {
       if (!t.date) return;
       const d = new Date(parseInt(t.date.uts) * 1000);
-      const key = d.toISOString().slice(0, 10);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       buckets[key] = (buckets[key] || 0) + 1;
     });
     const sorted = Object.keys(buckets).sort().slice(-14);
