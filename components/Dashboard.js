@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Bar } from "react-chartjs-2";
 import {
@@ -10,96 +10,78 @@ import {
   BarElement,
   Tooltip,
 } from "chart.js";
-import { getImg, isPlaceholderLastFmImage } from "@/lib/utils";
-import { lfm, timeAgo } from "@/lib/lastfm";
+import { getImg } from "@/lib/utils";
+import { timeAgo } from "@/lib/lastfm";
 import { artistPath, albumPath } from "@/lib/routes";
+import {
+  DASHBOARD_PERIODS,
+  loadDashboardData,
+  buildListeningTrendChartData,
+  LISTENING_TREND_CHART_OPTIONS,
+  dashboardStatusTone,
+} from "@/lib/dashboard";
 import Avatar from "./Avatar";
 import RankItem from "./RankItem";
 import StatCard from "./StatCard";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-const PERIODS = [
-  { label: "7 days", value: "7day" },
-  { label: "1 month", value: "1month" },
-  { label: "6 months", value: "6month" },
-  { label: "1 year", value: "12month" },
-  { label: "all time", value: "overall" },
-];
-
-async function enrichTopTracksWithAlbumArt(tracks, apiKey, username) {
-  const list = Array.isArray(tracks) ? tracks : [tracks];
-  return Promise.all(
-    list.map(async (t) => {
-      const existing = getImg(t.image, "small");
-      if (existing && !isPlaceholderLastFmImage(existing)) return t;
-      try {
-        const res = await lfm(
-          "track.getInfo",
-          {
-            artist: t.artist.name,
-            track: t.name,
-            username,
-            autocorrect: 1,
-          },
-          apiKey,
-        );
-        const album = res.track?.album;
-        const fromAlbum = album?.image ? getImg(album.image, "small") : "";
-        if (fromAlbum && !isPlaceholderLastFmImage(fromAlbum)) {
-          return { ...t, image: album.image };
-        }
-      } catch {
-        /* ignore */
-      }
-      return t;
-    }),
-  );
-}
-
-async function enrichTopArtistsWithImages(artists, apiKey, username) {
-  const list = Array.isArray(artists) ? artists : [artists];
-  return Promise.all(
-    list.map(async (a) => {
-      const existing = getImg(a.image, "medium");
-      if (existing && !isPlaceholderLastFmImage(existing)) return a;
-      try {
-        const res = await lfm(
-          "artist.getInfo",
-          {
-            artist: a.name,
-            autocorrect: 1,
-            ...(username.trim() ? { username } : {}),
-          },
-          apiKey,
-        );
-        const img = res.artist?.image;
-        const url = img ? getImg(img, "medium") : "";
-        if (url && !isPlaceholderLastFmImage(url)) {
-          return { ...a, image: img };
-        }
-      } catch {
-        /* ignore */
-      }
-      return a;
-    }),
-  );
-}
-
 export default function Dashboard() {
-  const [apiKey, setApiKey] = useState(
-    () =>
-      (typeof window !== "undefined" && localStorage.getItem("lfm_apikey")) ||
-      "",
-  );
-  const [username, setUsername] = useState(
-    () =>
-      (typeof window !== "undefined" && localStorage.getItem("lfm_user")) || "",
-  );
+  // Initial state must match the server render (empty). Reading localStorage in
+  // useState fails for client components: the initializer runs on the server
+  // where window is undefined, so saved credentials never hydrate.
+  const [apiKey, setApiKey] = useState("");
+  const [username, setUsername] = useState("");
   const [period, setPeriod] = useState("7day");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [data, setData] = useState(null);
+
+  const loadDataWith = useCallback(
+    async (lastFmApiKey, lastFmUsername, dashboardPeriod) => {
+      if (!lastFmApiKey.trim() || !lastFmUsername.trim()) {
+        setStatus({ msg: "enter both api key and username", type: "error" });
+        return;
+      }
+      setLoading(true);
+      setStatus({ msg: "loading your listening data...", type: "loading" });
+      try {
+        const { successMessage, ...dashboardPayload } = await loadDashboardData(
+          lastFmApiKey,
+          lastFmUsername,
+          dashboardPeriod,
+        );
+        setData(dashboardPayload);
+        setStatus({ msg: successMessage, type: "ok" });
+      } catch (error) {
+        setStatus({ msg: "error: " + error.message, type: "error" });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let storedApiKey = "";
+    let storedUsername = "";
+    try {
+      storedApiKey = localStorage.getItem("lfm_apikey") || "";
+      storedUsername =
+        localStorage.getItem("lfm_user") ||
+        localStorage.getItem("lmf_user") ||
+        "";
+    } catch {
+      /* private mode / blocked storage */
+    }
+    setApiKey(storedApiKey);
+    setUsername(storedUsername);
+    if (storedApiKey.trim() && storedUsername.trim()) {
+      void loadDataWith(storedApiKey, storedUsername, period);
+    }
+    // Mount-only: do not add `period` — changing period is handled by the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadDataWith]);
 
   useEffect(() => {
     if (apiKey) localStorage.setItem("lfm_apikey", apiKey);
@@ -109,170 +91,25 @@ export default function Dashboard() {
   }, [username]);
 
   async function loadData() {
-    if (!apiKey.trim() || !username.trim()) {
-      setStatus({ msg: "enter both api key and username", type: "error" });
-      return;
-    }
-    setLoading(true);
-    setStatus({ msg: "loading your listening data...", type: "loading" });
-    try {
-      const [artistsRes, tracksRes, albumsRes, recentRes, infoRes] =
-        await Promise.all([
-          lfm(
-            "user.gettopartists",
-            { user: username, period, limit: 10 },
-            apiKey,
-          ),
-          lfm(
-            "user.gettoptracks",
-            { user: username, period, limit: 10 },
-            apiKey,
-          ),
-          lfm(
-            "user.gettopalbums",
-            { user: username, period, limit: 10 },
-            apiKey,
-          ),
-          lfm("user.getrecenttracks", { user: username, limit: 200 }, apiKey),
-          lfm("user.getinfo", { user: username }, apiKey),
-        ]);
-
-      const info = infoRes.user;
-      const recentRaw = recentRes.recenttracks?.track;
-      const recent = recentRaw
-        ? Array.isArray(recentRaw)
-          ? recentRaw
-          : [recentRaw]
-        : [];
-
-      const tracksRaw = tracksRes.toptracks?.track;
-      const tracksList = tracksRaw
-        ? Array.isArray(tracksRaw)
-          ? tracksRaw
-          : [tracksRaw]
-        : [];
-      const tracks = await enrichTopTracksWithAlbumArt(
-        tracksList,
-        apiKey,
-        username,
-      );
-
-      const artistsRaw = artistsRes.topartists?.artist;
-      const artistsList = artistsRaw
-        ? Array.isArray(artistsRaw)
-          ? artistsRaw
-          : [artistsRaw]
-        : [];
-      const artists = await enrichTopArtistsWithImages(
-        artistsList,
-        apiKey,
-        username,
-      );
-
-      const albumsRaw = albumsRes.topalbums?.album;
-      const albums = albumsRaw
-        ? Array.isArray(albumsRaw)
-          ? albumsRaw
-          : [albumsRaw]
-        : [];
-
-      setData({
-        info,
-        artists,
-        artistsTotal: artistsRes.topartists?.["@attr"]?.total ?? "0",
-        tracks,
-        tracksTotal: tracksRes.toptracks?.["@attr"]?.total ?? "0",
-        albums,
-        albumsTotal: albumsRes.topalbums?.["@attr"]?.total ?? "0",
-        recent,
-      });
-      setStatus({
-        msg: `loaded for ${info.name} · ${parseInt(info.playcount).toLocaleString()} total scrobbles`,
-        type: "ok",
-      });
-    } catch (e) {
-      setStatus({ msg: "error: " + e.message, type: "error" });
-    }
-    setLoading(false);
+    await loadDataWith(apiKey, username, period);
   }
 
-  function handleKey(e) {
-    if (e.key === "Enter") loadData();
+  function handleKeyDown(keyboardEvent) {
+    if (keyboardEvent.key === "Enter") loadData();
   }
 
   useEffect(() => {
-    if (data) loadData();
+    if (!data) return;
+    void loadDataWith(apiKey, username, period);
+    // Only refetch when the stats window changes; initial load is handled by hydrate effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
-  const trendData = (() => {
-    if (!data) return null;
-    const buckets = {};
-    data.recent.forEach((t) => {
-      if (!t.date) return;
-      const d = new Date(parseInt(t.date.uts) * 1000);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      buckets[key] = (buckets[key] || 0) + 1;
-    });
-    const sorted = Object.keys(buckets).sort().slice(-14);
-    return {
-      labels: sorted.map((d) => {
-        const dt = new Date(d + "T12:00:00");
-        return dt.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-      }),
-      datasets: [
-        {
-          data: sorted.map((k) => buckets[k]),
-          backgroundColor: "rgba(155,93,229,0.5)",
-          borderColor: "#9b5de5",
-          borderWidth: 1,
-          borderRadius: 4,
-        },
-      ],
-    };
-  })();
+  const trendData = data
+    ? buildListeningTrendChartData(data.recent ?? [])
+    : null;
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: "#1f1f26",
-        titleColor: "#f0eff4",
-        bodyColor: "#7b7a87",
-        borderColor: "rgba(255,255,255,0.07)",
-        borderWidth: 1,
-        callbacks: { label: (ctx) => `${ctx.parsed.y} scrobbles` },
-      },
-    },
-    scales: {
-      x: {
-        grid: { color: "rgba(255,255,255,0.04)" },
-        ticks: { color: "#7b7a87", font: { family: "DM Mono", size: 10 } },
-      },
-      y: {
-        grid: { color: "rgba(255,255,255,0.04)" },
-        ticks: { color: "#7b7a87", font: { family: "DM Mono", size: 10 } },
-      },
-    },
-  };
-
-  const statusBorder =
-    status?.type === "error"
-      ? "border-red-400/20"
-      : status?.type === "ok"
-        ? "border-green-400/20"
-        : "border-white/[0.07]";
-  const statusText =
-    status?.type === "error"
-      ? "text-red-400"
-      : status?.type === "ok"
-        ? "text-green-400"
-        : "text-amber-400";
+  const tone = dashboardStatusTone(status?.type);
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] font-mono text-[#f0eff4]">
@@ -295,16 +132,18 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center gap-2 rounded-[14px] border border-white/[0.12] bg-[#111114] px-[1.1rem] py-[0.85rem]">
             <input
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onKeyDown={handleKey}
+              onChange={(changeEvent) => setApiKey(changeEvent.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="api key"
               type="password"
               className="w-[180px] rounded-lg border border-white/[0.07] bg-[#1f1f26] px-[11px] py-[7px] font-mono text-xs text-[#f0eff4] outline-none placeholder:text-[#504f5c]"
             />
             <input
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyDown={handleKey}
+              onChange={(changeEvent) =>
+                setUsername(changeEvent.target.value)
+              }
+              onKeyDown={handleKeyDown}
               placeholder="username"
               className="w-[130px] rounded-lg border border-white/[0.07] bg-[#1f1f26] px-[11px] py-[7px] font-mono text-xs text-[#f0eff4] outline-none placeholder:text-[#504f5c]"
             />
@@ -321,25 +160,25 @@ export default function Dashboard() {
 
         {status && (
           <div
-            className={`mb-6 rounded-[10px] border bg-[#111114] px-4 py-2.5 text-xs ${statusBorder} ${statusText}`}
+            className={`mb-6 rounded-[10px] border bg-[#111114] px-4 py-2.5 text-xs ${tone.border} ${tone.text}`}
           >
             {status.msg}
           </div>
         )}
 
         <div className="mb-8 flex w-fit gap-1 rounded-[10px] border border-white/[0.07] bg-[#111114] p-1">
-          {PERIODS.map((p) => (
+          {DASHBOARD_PERIODS.map((periodOption) => (
             <button
-              key={p.value}
+              key={periodOption.value}
               type="button"
-              onClick={() => setPeriod(p.value)}
+              onClick={() => setPeriod(periodOption.value)}
               className={`cursor-pointer rounded-[7px] border-none px-3.5 py-1.5 font-mono text-[11px] ${
-                period === p.value
+                period === periodOption.value
                   ? "bg-[#3d2060] text-[#c8a8f0]"
                   : "bg-transparent text-[#7b7a87]"
               }`}
             >
-              {p.label}
+              {periodOption.label}
             </button>
           ))}
         </div>
@@ -360,22 +199,22 @@ export default function Dashboard() {
               <StatCard
                 label="scrobbles"
                 value={parseInt(data.info.playcount).toLocaleString()}
-                sub={`since ${new Date(parseInt(data.info.registered.unixtime) * 1000).getFullYear()}`}
+                subtitle={`since ${new Date(parseInt(data.info.registered.unixtime) * 1000).getFullYear()}`}
               />
               <StatCard
                 label="artists"
                 value={parseInt(data.artistsTotal).toLocaleString()}
-                sub="unique"
+                subtitle="unique"
               />
               <StatCard
                 label="albums"
                 value={parseInt(data.albumsTotal).toLocaleString()}
-                sub="unique"
+                subtitle="unique"
               />
               <StatCard
                 label="tracks"
                 value={parseInt(data.tracksTotal).toLocaleString()}
-                sub="unique"
+                subtitle="unique"
               />
             </div>
 
@@ -384,21 +223,25 @@ export default function Dashboard() {
                 top artists
               </div>
               <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
-                {data.artists.slice(0, 8).map((a, i) => {
-                  const max = Math.max(
-                    ...data.artists.map((x) => parseInt(x.playcount)),
+                {data.artists.slice(0, 8).map((topArtist, rankIndex) => {
+                  const playcounts = data.artists.map((artistEntry) =>
+                    parseInt(artistEntry.playcount, 10),
                   );
+                  const maxPlaycount =
+                    playcounts.length > 0 ? Math.max(...playcounts) : 1;
                   return (
                     <RankItem
-                      key={a.name}
-                      rank={i + 1}
-                      img={getImg(a.image, "medium")}
+                      key={topArtist.name}
+                      rank={rankIndex + 1}
+                      img={getImg(topArtist.image, "medium")}
                       round
-                      name={a.name}
-                      nameHref={artistPath(a.name)}
-                      meta={`${parseInt(a.playcount).toLocaleString()} plays`}
-                      plays={a.playcount}
-                      barPct={Math.round((parseInt(a.playcount) / max) * 100)}
+                      name={topArtist.name}
+                      nameHref={artistPath(topArtist.name)}
+                      meta={`${parseInt(topArtist.playcount).toLocaleString()} plays`}
+                      plays={topArtist.playcount}
+                      barPct={Math.round(
+                        (parseInt(topArtist.playcount) / maxPlaycount) * 100,
+                      )}
                     />
                   );
                 })}
@@ -411,17 +254,27 @@ export default function Dashboard() {
                   top tracks
                 </div>
                 <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
-                  {data.tracks.slice(0, 8).map((t, i) => (
+                  {data.tracks.slice(0, 8).map((topTrack, rankIndex) => {
+                    const trackArtistName =
+                      topTrack.artist?.name ??
+                      topTrack.artist?.["#text"] ??
+                      "";
+                    return (
                     <RankItem
-                      key={t.name + t.artist.name}
-                      rank={i + 1}
-                      img={getImg(t.image, "small", t.name)}
-                      name={t.name}
-                      meta={t.artist.name}
-                      metaHref={artistPath(t.artist.name)}
-                      plays={t.playcount}
+                      key={topTrack.name + trackArtistName}
+                      rank={rankIndex + 1}
+                      img={getImg(topTrack.image, "small", topTrack.name)}
+                      name={topTrack.name}
+                      meta={trackArtistName}
+                      metaHref={
+                        trackArtistName
+                          ? artistPath(trackArtistName)
+                          : undefined
+                      }
+                      plays={topTrack.playcount}
                     />
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
               <div>
@@ -429,16 +282,16 @@ export default function Dashboard() {
                   top albums
                 </div>
                 <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
-                  {data.albums.slice(0, 8).map((a, i) => (
+                  {data.albums.slice(0, 8).map((topAlbum, rankIndex) => (
                     <RankItem
-                      key={a.name + a.artist.name}
-                      rank={i + 1}
-                      img={getImg(a.image, "small")}
-                      name={a.name}
-                      nameHref={albumPath(a.artist.name, a.name)}
-                      meta={a.artist.name}
-                      metaHref={artistPath(a.artist.name)}
-                      plays={a.playcount}
+                      key={topAlbum.name + topAlbum.artist.name}
+                      rank={rankIndex + 1}
+                      img={getImg(topAlbum.image, "small")}
+                      name={topAlbum.name}
+                      nameHref={albumPath(topAlbum.artist.name, topAlbum.name)}
+                      meta={topAlbum.artist.name}
+                      metaHref={artistPath(topAlbum.artist.name)}
+                      plays={topAlbum.playcount}
                     />
                   ))}
                 </div>
@@ -451,7 +304,12 @@ export default function Dashboard() {
               </div>
               <div className="rounded-[14px] border border-white/[0.07] bg-[#0d0d10] p-5">
                 <div className="h-[180px]">
-                  {trendData && <Bar data={trendData} options={chartOptions} />}
+                  {trendData && (
+                    <Bar
+                      data={trendData}
+                      options={LISTENING_TREND_CHART_OPTIONS}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -461,20 +319,23 @@ export default function Dashboard() {
                 recent tracks
               </div>
               <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
-                {data.recent.slice(0, 12).map((t, i) => {
-                  const nowPlaying = t["@attr"]?.nowplaying;
-                  const artistName = t.artist["#text"];
+                {data.recent.slice(0, 12).map((recentTrack, rowIndex) => {
+                  const nowPlaying = recentTrack["@attr"]?.nowplaying;
+                  const artistName =
+                    recentTrack.artist?.["#text"] ??
+                    recentTrack.artist?.name ??
+                    "";
                   return (
                     <div
-                      key={i}
+                      key={`${recentTrack.name}-${artistName}-${rowIndex}`}
                       className={`flex items-center gap-2.5 px-5 py-[9px] ${
-                        i < 11 ? "border-b border-white/[0.07]" : ""
+                        rowIndex < 11 ? "border-b border-white/[0.07]" : ""
                       }`}
                     >
-                      <Avatar src={getImg(t.image, "small")} size={36} />
+                      <Avatar src={getImg(recentTrack.image, "small")} size={36} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-sans text-[13px] font-medium text-[#f0eff4]">
-                          {t.name}
+                          {recentTrack.name}
                         </div>
                         <div className="truncate font-mono text-[11px] text-[#7b7a87]">
                           <Link
@@ -491,7 +352,9 @@ export default function Dashboard() {
                         </span>
                       ) : (
                         <span className="whitespace-nowrap font-mono text-[10px] text-[#504f5c]">
-                          {t.date ? timeAgo(t.date.uts) : ""}
+                          {recentTrack.date
+                            ? timeAgo(recentTrack.date.uts)
+                            : ""}
                         </span>
                       )}
                     </div>

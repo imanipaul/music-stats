@@ -2,49 +2,29 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { lfm } from "@/lib/lastfm";
 import { getImg } from "@/lib/utils";
 import { artistPath } from "@/lib/routes";
-import { stripWikiHtml } from "@/lib/wiki";
+import { decodeSlug } from "@/lib/lastfm-helpers";
+import {
+  formatDurationSeconds,
+  sortAlbumTracksByRank,
+  getAlbumWikiText,
+} from "@/lib/album-helpers";
+import { fetchAlbumDetailData } from "@/lib/album-service";
+import { useLastFmCredentials } from "@/hooks/useLastFmCredentials";
 import DetailLayout from "./DetailLayout";
 
-function normalizeList(x) {
-  if (!x) return [];
-  return Array.isArray(x) ? x : [x];
-}
-
 export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
-  const artistName = (() => {
-    try {
-      return decodeURIComponent(encodedArtist);
-    } catch {
-      return encodedArtist;
-    }
-  })();
-  const albumName = (() => {
-    try {
-      return decodeURIComponent(encodedAlbum);
-    } catch {
-      return encodedAlbum;
-    }
-  })();
+  const artistName = decodeSlug(encodedArtist);
+  const albumName = decodeSlug(encodedAlbum);
+  const { ready, apiKey, username } = useLastFmCredentials();
 
-  const [ready, setReady] = useState(false);
-  const [creds, setCreds] = useState({ apiKey: "", username: "" });
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [album, setAlbum] = useState(null);
 
   useEffect(() => {
-    setCreds({
-      apiKey: localStorage.getItem("lfm_apikey") || "",
-      username: localStorage.getItem("lfm_user") || "",
-    });
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!creds.apiKey || !artistName.trim() || !albumName.trim()) {
+    if (!apiKey || !artistName.trim() || !albumName.trim()) {
       setLoading(false);
       return;
     }
@@ -52,31 +32,20 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
     let cancelled = false;
     async function run() {
       setLoading(true);
-      setErr(null);
+      setLoadError(null);
       setAlbum(null);
       try {
-        const userOpt =
-          creds.username.trim().length > 0
-            ? { username: creds.username.trim() }
-            : {};
-        const res = await lfm(
-          "album.getInfo",
-          {
-            artist: artistName,
-            album: albumName,
-            autocorrect: 1,
-            ...userOpt,
-          },
-          creds.apiKey,
-        );
-
+        const albumRecord = await fetchAlbumDetailData({
+          apiKey,
+          username,
+          artistName,
+          albumName,
+        });
         if (cancelled) return;
-
-        const al = res.album;
-        if (!al) throw new Error("Album not found");
-        setAlbum(al);
-      } catch (e) {
-        if (!cancelled) setErr(e.message || "Failed to load album");
+        setAlbum(albumRecord);
+      } catch (error) {
+        if (!cancelled)
+          setLoadError(error.message || "Failed to load album");
       }
       if (!cancelled) setLoading(false);
     }
@@ -85,20 +54,10 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
     return () => {
       cancelled = true;
     };
-  }, [creds.apiKey, creds.username, artistName, albumName]);
+  }, [apiKey, username, artistName, albumName]);
 
-  const wiki = album?.wiki?.content
-    ? stripWikiHtml(album.wiki.content)
-    : album?.wiki?.summary
-      ? stripWikiHtml(album.wiki.summary)
-      : "";
-
-  const tracksRaw = album?.tracks?.track;
-  const tracks = normalizeList(tracksRaw).sort((a, b) => {
-    const an = parseInt(a["@attr"]?.rank || 0, 10);
-    const bn = parseInt(b["@attr"]?.rank || 0, 10);
-    return an - bn;
-  });
+  const wiki = album ? getAlbumWikiText(album) : "";
+  const tracks = album ? sortAlbumTracksByRank(album?.tracks?.track) : [];
 
   if (!ready) {
     return (
@@ -108,7 +67,7 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
     );
   }
 
-  if (!creds.apiKey) {
+  if (!apiKey) {
     return (
       <DetailLayout>
         <p className="text-[13px] leading-relaxed text-[#7b7a87]">
@@ -122,7 +81,7 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
     );
   }
 
-  if (loading && !album && creds.apiKey) {
+  if (loading && !album && apiKey) {
     return (
       <DetailLayout>
         <p className="text-[13px] text-[#7b7a87]">Loading album…</p>
@@ -130,10 +89,10 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
     );
   }
 
-  if (err) {
+  if (loadError) {
     return (
       <DetailLayout>
-        <p className="text-[13px] text-red-400">{err}</p>
+        <p className="text-[13px] text-red-400">{loadError}</p>
       </DetailLayout>
     );
   }
@@ -200,7 +159,7 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
               </span>
             )}
             {album.userplaycount !== undefined &&
-              creds.username.trim() !== "" && (
+              username.trim() !== "" && (
                 <span>
                   your plays:{" "}
                   <span className="text-[#c8a8f0]">
@@ -229,20 +188,20 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
             Track listing
           </h2>
           <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
-            {tracks.map((tr, i) => (
+            {tracks.map((track, trackIndex) => (
               <div
-                key={tr.name + i}
+                key={track.name + trackIndex}
                 className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-2.5 last:border-b-0"
               >
                 <span className="w-8 shrink-0 font-mono text-[11px] text-[#504f5c]">
-                  {tr["@attr"]?.rank || i + 1}
+                  {track["@attr"]?.rank || trackIndex + 1}
                 </span>
                 <span className="min-w-0 flex-1 truncate font-sans text-[13px] text-[#f0eff4]">
-                  {tr.name}
+                  {track.name}
                 </span>
-                {tr.duration ? (
+                {track.duration ? (
                   <span className="shrink-0 font-mono text-[10px] text-[#504f5c]">
-                    {formatDuration(tr.duration)}
+                    {formatDurationSeconds(track.duration)}
                   </span>
                 ) : null}
               </div>
@@ -252,12 +211,4 @@ export default function AlbumDetailPage({ encodedArtist, encodedAlbum }) {
       )}
     </DetailLayout>
   );
-}
-
-function formatDuration(seconds) {
-  const s = parseInt(seconds, 10);
-  if (Number.isNaN(s) || s <= 0) return "";
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${String(r).padStart(2, "0")}`;
 }

@@ -15,12 +15,15 @@ const syne = Syne({
 
 export const metadata = {
   title: "scrobble.stats",
-  description: "Last.fm listening dashboard powered by Last.fm",
+  description: "Music listening dashboard powered by Last.fm",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${dmMono.variable} ${syne.variable}`}>
+    <html
+      lang="en"
+      className={`${dmMono.variable} ${syne.variable} bg-[#0a0a0b]`}
+    >
       <body className="font-mono antialiased">{children}</body>
     </html>
   );
