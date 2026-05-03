@@ -1,4 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -7,89 +10,14 @@ import {
   BarElement,
   Tooltip,
 } from "chart.js";
-import { getImg, isPlaceholderLastFmImage } from "./utils.js";
+import { getImg, isPlaceholderLastFmImage } from "@/lib/utils";
+import { lfm, timeAgo } from "@/lib/lastfm";
+import { artistPath, albumPath } from "@/lib/routes";
+import Avatar from "./Avatar";
+import RankItem from "./RankItem";
+import StatCard from "./StatCard";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
-
-const API_BASE = "https://ws.audioscrobbler.com/2.0/";
-
-async function lfm(method, params, apiKey) {
-  const p = new URLSearchParams({
-    method,
-    api_key: apiKey,
-    format: "json",
-    ...params,
-  });
-  const r = await fetch(`${API_BASE}?${p}`);
-  const d = await r.json();
-  if (d.error) throw new Error(d.message || `API error ${d.error}`);
-  return d;
-}
-
-function timeAgo(uts) {
-  const diff = Math.floor(Date.now() / 1000) - parseInt(uts);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-function Avatar({ src, round, size = 40 }) {
-  const [err, setErr] = useState(false);
-  const dim = size === 36 ? "h-9 w-9" : "h-10 w-10";
-  const radius = round ? "rounded-full" : "rounded-md";
-  const cls = `block shrink-0 object-cover bg-[#1f1f26] ${dim} ${radius}`;
-  if (!src || err) return <div className={cls} />;
-  return <img src={src} alt="" className={cls} onError={() => setErr(true)} />;
-}
-
-function StatCard({ label, value, sub }) {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-[#111114] p-4">
-      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.8px] text-[#7b7a87]">
-        {label}
-      </div>
-      <div className="font-sans text-[26px] font-extrabold text-[#f0eff4]">
-        {value || "—"}
-      </div>
-      {sub && (
-        <div className="mt-0.5 font-mono text-[10px] text-[#7b7a87]">{sub}</div>
-      )}
-    </div>
-  );
-}
-
-function RankItem({ rank, img: imgSrc, round, name, meta, plays, barPct }) {
-  return (
-    <div className="flex items-center gap-3 border-b border-white/[0.07] py-2.5 px-5">
-      <span className="w-[18px] shrink-0 text-right font-mono text-[11px] text-[#504f5c]">
-        {rank}
-      </span>
-      <Avatar src={imgSrc} round={round} size={40} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-sans text-[13px] font-medium text-[#f0eff4]">
-          {name}
-        </div>
-        {meta && (
-          <div className="mt-0.5 font-mono text-[11px] text-[#7b7a87]">
-            {meta}
-          </div>
-        )}
-      </div>
-      {barPct !== undefined && (
-        <div className="h-[3px] w-20 shrink-0 rounded-sm bg-[#1f1f26]">
-          <div
-            className="h-full rounded-sm bg-gradient-to-r from-[#9b5de5] to-[#c8a8f0]"
-            style={{ width: `${barPct}%` }}
-          />
-        </div>
-      )}
-      <span className="whitespace-nowrap font-mono text-xs font-medium text-[#c8a8f0]">
-        {parseInt(plays).toLocaleString()}
-      </span>
-    </div>
-  );
-}
 
 const PERIODS = [
   { label: "7 days", value: "7day" },
@@ -99,7 +27,6 @@ const PERIODS = [
   { label: "all time", value: "overall" },
 ];
 
-/** Last.fm often leaves `user.gettoptracks` images empty or uses a generic star; `track.getInfo` usually has real `album.image`. */
 async function enrichTopTracksWithAlbumArt(tracks, apiKey, username) {
   const list = Array.isArray(tracks) ? tracks : [tracks];
   return Promise.all(
@@ -123,14 +50,13 @@ async function enrichTopTracksWithAlbumArt(tracks, apiKey, username) {
           return { ...t, image: album.image };
         }
       } catch {
-        /* ignore per-track failures */
+        /* ignore */
       }
       return t;
     }),
   );
 }
 
-/** `user.gettopartists` often returns empty or generic star images; `artist.getInfo` usually has real photos. */
 async function enrichTopArtistsWithImages(artists, apiKey, username) {
   const list = Array.isArray(artists) ? artists : [artists];
   return Promise.all(
@@ -153,19 +79,22 @@ async function enrichTopArtistsWithImages(artists, apiKey, username) {
           return { ...a, image: img };
         }
       } catch {
-        /* ignore per-artist failures */
+        /* ignore */
       }
       return a;
     }),
   );
 }
 
-export default function App() {
+export default function Dashboard() {
   const [apiKey, setApiKey] = useState(
-    () => localStorage.getItem("lfm_apikey") || "",
+    () =>
+      (typeof window !== "undefined" && localStorage.getItem("lfm_apikey")) ||
+      "",
   );
   const [username, setUsername] = useState(
-    () => localStorage.getItem("lfm_user") || "",
+    () =>
+      (typeof window !== "undefined" && localStorage.getItem("lfm_user")) || "",
   );
   const [period, setPeriod] = useState("7day");
   const [loading, setLoading] = useState(false);
@@ -209,34 +138,52 @@ export default function App() {
         ]);
 
       const info = infoRes.user;
-      const recent = Array.isArray(recentRes.recenttracks.track)
-        ? recentRes.recenttracks.track
-        : [recentRes.recenttracks.track];
+      const recentRaw = recentRes.recenttracks?.track;
+      const recent = recentRaw
+        ? Array.isArray(recentRaw)
+          ? recentRaw
+          : [recentRaw]
+        : [];
 
-      const tracksRaw = tracksRes.toptracks.track;
-      const tracksList = Array.isArray(tracksRaw) ? tracksRaw : [tracksRaw];
+      const tracksRaw = tracksRes.toptracks?.track;
+      const tracksList = tracksRaw
+        ? Array.isArray(tracksRaw)
+          ? tracksRaw
+          : [tracksRaw]
+        : [];
       const tracks = await enrichTopTracksWithAlbumArt(
         tracksList,
         apiKey,
         username,
       );
 
-      const artistsRaw = artistsRes.topartists.artist;
-      const artistsList = Array.isArray(artistsRaw) ? artistsRaw : [artistsRaw];
+      const artistsRaw = artistsRes.topartists?.artist;
+      const artistsList = artistsRaw
+        ? Array.isArray(artistsRaw)
+          ? artistsRaw
+          : [artistsRaw]
+        : [];
       const artists = await enrichTopArtistsWithImages(
         artistsList,
         apiKey,
         username,
       );
 
+      const albumsRaw = albumsRes.topalbums?.album;
+      const albums = albumsRaw
+        ? Array.isArray(albumsRaw)
+          ? albumsRaw
+          : [albumsRaw]
+        : [];
+
       setData({
         info,
         artists,
-        artistsTotal: artistsRes.topartists["@attr"].total,
+        artistsTotal: artistsRes.topartists?.["@attr"]?.total ?? "0",
         tracks,
-        tracksTotal: tracksRes.toptracks["@attr"].total,
-        albums: albumsRes.topalbums.album,
-        albumsTotal: albumsRes.topalbums["@attr"].total,
+        tracksTotal: tracksRes.toptracks?.["@attr"]?.total ?? "0",
+        albums,
+        albumsTotal: albumsRes.topalbums?.["@attr"]?.total ?? "0",
         recent,
       });
       setStatus({
@@ -253,13 +200,9 @@ export default function App() {
     if (e.key === "Enter") loadData();
   }
 
-  function handlePeriod(val) {
-    setPeriod(val);
-  }
-
   useEffect(() => {
     if (data) loadData();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
   const trendData = (() => {
@@ -334,7 +277,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0a0a0b] font-mono text-[#f0eff4]">
       <div className="mx-auto max-w-[900px] px-6 py-8">
-        {/* Header */}
         <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#9b5de5]">
@@ -344,7 +286,9 @@ export default function App() {
             </div>
             <div>
               <div className="font-sans text-lg font-bold">scrobble.stats</div>
-              <div className="text-[11px] text-[#7b7a87]">powered by last.fm</div>
+              <div className="text-[11px] text-[#7b7a87]">
+                powered by last.fm
+              </div>
             </div>
           </div>
 
@@ -365,6 +309,7 @@ export default function App() {
               className="w-[130px] rounded-lg border border-white/[0.07] bg-[#1f1f26] px-[11px] py-[7px] font-mono text-xs text-[#f0eff4] outline-none placeholder:text-[#504f5c]"
             />
             <button
+              type="button"
               onClick={loadData}
               disabled={loading}
               className="rounded-lg border-none bg-[#9b5de5] px-3.5 py-[7px] font-mono text-xs text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -374,7 +319,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Status */}
         {status && (
           <div
             className={`mb-6 rounded-[10px] border bg-[#111114] px-4 py-2.5 text-xs ${statusBorder} ${statusText}`}
@@ -383,12 +327,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Time tabs */}
         <div className="mb-8 flex w-fit gap-1 rounded-[10px] border border-white/[0.07] bg-[#111114] p-1">
           {PERIODS.map((p) => (
             <button
               key={p.value}
-              onClick={() => handlePeriod(p.value)}
+              type="button"
+              onClick={() => setPeriod(p.value)}
               className={`cursor-pointer rounded-[7px] border-none px-3.5 py-1.5 font-mono text-[11px] ${
                 period === p.value
                   ? "bg-[#3d2060] text-[#c8a8f0]"
@@ -412,7 +356,6 @@ export default function App() {
 
         {data && (
           <>
-            {/* Stat cards */}
             <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5">
               <StatCard
                 label="scrobbles"
@@ -436,7 +379,6 @@ export default function App() {
               />
             </div>
 
-            {/* Top Artists */}
             <div className="mb-8">
               <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                 top artists
@@ -453,6 +395,7 @@ export default function App() {
                       img={getImg(a.image, "medium")}
                       round
                       name={a.name}
+                      nameHref={artistPath(a.name)}
                       meta={`${parseInt(a.playcount).toLocaleString()} plays`}
                       plays={a.playcount}
                       barPct={Math.round((parseInt(a.playcount) / max) * 100)}
@@ -462,7 +405,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Top Tracks + Albums */}
             <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
                 <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
@@ -476,6 +418,7 @@ export default function App() {
                       img={getImg(t.image, "small", t.name)}
                       name={t.name}
                       meta={t.artist.name}
+                      metaHref={artistPath(t.artist.name)}
                       plays={t.playcount}
                     />
                   ))}
@@ -492,7 +435,9 @@ export default function App() {
                       rank={i + 1}
                       img={getImg(a.image, "small")}
                       name={a.name}
+                      nameHref={albumPath(a.artist.name, a.name)}
                       meta={a.artist.name}
+                      metaHref={artistPath(a.artist.name)}
                       plays={a.playcount}
                     />
                   ))}
@@ -500,7 +445,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Trend chart */}
             <div className="mb-8">
               <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                 listening trend
@@ -512,7 +456,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Recent tracks */}
             <div className="mb-8">
               <div className="mb-4 font-sans text-[13px] font-semibold uppercase tracking-wide text-[#7b7a87]">
                 recent tracks
@@ -520,6 +463,7 @@ export default function App() {
               <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
                 {data.recent.slice(0, 12).map((t, i) => {
                   const nowPlaying = t["@attr"]?.nowplaying;
+                  const artistName = t.artist["#text"];
                   return (
                     <div
                       key={i}
@@ -532,8 +476,13 @@ export default function App() {
                         <div className="truncate font-sans text-[13px] font-medium text-[#f0eff4]">
                           {t.name}
                         </div>
-                        <div className="font-mono text-[11px] text-[#7b7a87]">
-                          {t.artist["#text"]}
+                        <div className="truncate font-mono text-[11px] text-[#7b7a87]">
+                          <Link
+                            href={artistPath(artistName)}
+                            className="hover:text-[#c8a8f0] hover:underline"
+                          >
+                            {artistName}
+                          </Link>
                         </div>
                       </div>
                       {nowPlaying ? (

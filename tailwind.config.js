@@ -1,11 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
+  content: [
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+  ],
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Syne", "system-ui", "sans-serif"],
-        mono: ["DM Mono", "ui-monospace", "monospace"],
+        sans: ["var(--font-syne)", "system-ui", "sans-serif"],
+        mono: ["var(--font-dm-mono)", "ui-monospace", "monospace"],
       },
     },
   },
