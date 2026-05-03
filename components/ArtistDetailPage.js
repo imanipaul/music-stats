@@ -48,8 +48,7 @@ export default function ArtistDetailPage({ encodedSlug }) {
         setTopAlbums(result.topAlbums);
         setSimilar(result.similar);
       } catch (error) {
-        if (!cancelled)
-          setLoadError(error.message || "Failed to load artist");
+        if (!cancelled) setLoadError(error.message || "Failed to load artist");
       }
       if (!cancelled) setLoading(false);
     }
@@ -60,9 +59,7 @@ export default function ArtistDetailPage({ encodedSlug }) {
     };
   }, [apiKey, username, artistName]);
 
-  const bio = artist?.bio?.summary
-    ? stripWikiHtml(artist.bio.summary)
-    : "";
+  const bio = artist?.bio?.content ? stripWikiHtml(artist.bio.content) : "";
   const tags = normalizeList(artist?.tags?.tag).filter(Boolean);
 
   if (!ready) {
@@ -149,15 +146,14 @@ export default function ArtistDetailPage({ encodedSlug }) {
                 </span>
               </span>
             )}
-            {artist.userplaycount !== undefined &&
-              username.trim() !== "" && (
-                <span>
-                  your plays:{" "}
-                  <span className="text-[#c8a8f0]">
-                    {parseInt(artist.userplaycount || 0).toLocaleString()}
-                  </span>
+            {artist.userplaycount !== undefined && username.trim() !== "" && (
+              <span>
+                your plays:{" "}
+                <span className="text-[#c8a8f0]">
+                  {parseInt(artist.userplaycount || 0).toLocaleString()}
                 </span>
-              )}
+              </span>
+            )}
           </div>
           {tags.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
@@ -179,7 +175,7 @@ export default function ArtistDetailPage({ encodedSlug }) {
           <h2 className="mb-3 font-sans text-[12px] font-semibold uppercase tracking-wide text-[#7b7a87]">
             About
           </h2>
-          <p className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-[#c5c3d0]">
+          <p className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-[#c5c3d0] max-h-[320px] overflow-y-auto">
             {bio}
           </p>
         </section>

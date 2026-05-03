@@ -140,9 +140,7 @@ export default function Dashboard() {
             />
             <input
               value={username}
-              onChange={(changeEvent) =>
-                setUsername(changeEvent.target.value)
-              }
+              onChange={(changeEvent) => setUsername(changeEvent.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="username"
               className="w-[130px] rounded-lg border border-white/[0.07] bg-[#1f1f26] px-[11px] py-[7px] font-mono text-xs text-[#f0eff4] outline-none placeholder:text-[#504f5c]"
@@ -256,24 +254,22 @@ export default function Dashboard() {
                 <div className="overflow-hidden rounded-[14px] border border-white/[0.07] bg-[#0d0d10]">
                   {data.tracks.slice(0, 8).map((topTrack, rankIndex) => {
                     const trackArtistName =
-                      topTrack.artist?.name ??
-                      topTrack.artist?.["#text"] ??
-                      "";
+                      topTrack.artist?.name ?? topTrack.artist?.["#text"] ?? "";
                     return (
-                    <RankItem
-                      key={topTrack.name + trackArtistName}
-                      rank={rankIndex + 1}
-                      img={getImg(topTrack.image, "small", topTrack.name)}
-                      name={topTrack.name}
-                      meta={trackArtistName}
-                      metaHref={
-                        trackArtistName
-                          ? artistPath(trackArtistName)
-                          : undefined
-                      }
-                      plays={topTrack.playcount}
-                    />
-                  );
+                      <RankItem
+                        key={topTrack.name + trackArtistName}
+                        rank={rankIndex + 1}
+                        img={getImg(topTrack.image, "small", topTrack.name)}
+                        name={topTrack.name}
+                        meta={trackArtistName}
+                        metaHref={
+                          trackArtistName
+                            ? artistPath(trackArtistName)
+                            : undefined
+                        }
+                        plays={topTrack.playcount}
+                      />
+                    );
                   })}
                 </div>
               </div>
@@ -332,7 +328,10 @@ export default function Dashboard() {
                         rowIndex < 11 ? "border-b border-white/[0.07]" : ""
                       }`}
                     >
-                      <Avatar src={getImg(recentTrack.image, "small")} size={36} />
+                      <Avatar
+                        src={getImg(recentTrack.image, "small")}
+                        size={36}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-sans text-[13px] font-medium text-[#f0eff4]">
                           {recentTrack.name}

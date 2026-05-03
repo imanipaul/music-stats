@@ -1,4 +1,4 @@
-import "./globals.css";
+import "./styles/global.css";
 import { DM_Mono, Syne } from "next/font/google";
 
 const dmMono = DM_Mono({
