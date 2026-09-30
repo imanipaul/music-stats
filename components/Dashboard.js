@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -21,6 +20,9 @@ import {
   dashboardStatusTone,
 } from "@/lib/dashboard";
 import Avatar from "./Avatar";
+import DashboardSkeleton from "./DashboardSkeleton";
+import ListeningTrendChart from "./ListeningTrendChart";
+import PeriodSelector from "./PeriodSelector";
 import RankItem from "./RankItem";
 import StatCard from "./StatCard";
 
@@ -164,22 +166,11 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="mb-8 flex w-fit gap-1 rounded-[10px] border border-white/[0.07] bg-[#111114] p-1">
-          {DASHBOARD_PERIODS.map((periodOption) => (
-            <button
-              key={periodOption.value}
-              type="button"
-              onClick={() => setPeriod(periodOption.value)}
-              className={`cursor-pointer rounded-[7px] border-none px-3.5 py-1.5 font-mono text-[11px] ${
-                period === periodOption.value
-                  ? "bg-[#3d2060] text-[#c8a8f0]"
-                  : "bg-transparent text-[#7b7a87]"
-              }`}
-            >
-              {periodOption.label}
-            </button>
-          ))}
-        </div>
+        <PeriodSelector
+          periods={DASHBOARD_PERIODS}
+          value={period}
+          onChange={setPeriod}
+        />
 
         {!data && !loading && (
           <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
@@ -191,14 +182,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {data && (
+        {loading && <DashboardSkeleton />}
+
+        {data && !loading && (
           <>
             <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5">
-              <StatCard
-                label="scrobbles"
-                value={parseInt(data.info.playcount).toLocaleString()}
-                subtitle={`since ${new Date(parseInt(data.info.registered.unixtime) * 1000).getFullYear()}`}
-              />
+              
               <StatCard
                 label="artists"
                 value={parseInt(data.artistsTotal).toLocaleString()}
@@ -299,14 +288,10 @@ export default function Dashboard() {
                 listening trend
               </div>
               <div className="rounded-[14px] border border-white/[0.07] bg-[#0d0d10] p-5">
-                <div className="h-[180px]">
-                  {trendData && (
-                    <Bar
-                      data={trendData}
-                      options={LISTENING_TREND_CHART_OPTIONS}
-                    />
-                  )}
-                </div>
+                <ListeningTrendChart
+                  data={trendData}
+                  options={LISTENING_TREND_CHART_OPTIONS}
+                />
               </div>
             </div>
 
