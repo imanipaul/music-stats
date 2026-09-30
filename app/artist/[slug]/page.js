@@ -1,5 +1,9 @@
 import ArtistDetailPage from "@/components/ArtistDetailPage";
 
-export default function ArtistPage({ params }) {
-  return <ArtistDetailPage encodedSlug={params.slug} />;
+export default async function ArtistPage({ params }) {
+  const { slug } = await params;
+  if (!slug) {
+    return <div>No slug provided</div>;
+  }
+  return <ArtistDetailPage encodedSlug={slug} />;
 }

@@ -23,8 +23,11 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       className={`${dmMono.variable} ${syne.variable} bg-[#0a0a0b]`}
+      suppressHydrationWarning
     >
-      <body className="font-mono antialiased">{children}</body>
+      <body className="font-mono antialiased" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
